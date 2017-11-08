@@ -76,7 +76,6 @@ export function setLogger(logger: ServiceLogger): void {
     _logger = logger;
 }
 
-// tslint:disable:no-any
 export function buildService<T extends Object>(base?: T): Builder<T, Params> {
     const service = Object.assign(base || {}, { events: [] });
     let hooks: any = { before: {}, after: {} };
@@ -186,7 +185,6 @@ export function buildService<T extends Object>(base?: T): Builder<T, Params> {
             return builder;
         },
         build: (path: string, app: Application) => {
-            // tslint:disable-next-line:no-any
             app.use(path, <any>service);
             const built: any = app.service(path);
             built.hooks(hooks);

@@ -12,7 +12,6 @@
     "feathers": "^2.1.7"
   },
   "devDependencies": {
-    "tslint": "^5.6.0",
     "typescript": "^2.4.2"
   }
 }

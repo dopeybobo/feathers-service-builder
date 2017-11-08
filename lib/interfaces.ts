@@ -1,10 +1,8 @@
 import { Application } from 'feathers';
 import { AfterHook, AfterParams, BeforeHook, ValidateHook } from './hooks';
 
-// tslint:disable:no-any
 export type Filter<I, O = I, H extends AfterParams<any, any, I> = any> =
     (data: I, connection: any, hook: H) => Promise<O | false> | O | false;
-// tslint:enable:no-any
 
 export interface FindService<O> {
     find(): Promise<O>;
@@ -228,7 +226,6 @@ export interface Builder<S, P> {
     update(): UpdateBuilder<S, P, void, P>;
     patch(): PatchBuilder<S, P, void, P>;
     remove(): RemoveBuilder<S, P, P>;
-    // tslint:disable-next-line:no-any
     afterAll(hook: AfterHook<void, any, any, any, any>): this;
     customEventFilter<E extends string, T, T2>(event: E,
         filter: Filter<T, T2>): CustomEventFilterBuilder<S, E, T, P, T2>;
