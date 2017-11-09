@@ -1,12 +1,20 @@
 import { Application, Params } from 'feathers';
-import { AnyParams } from './hooks';
+import { disallow } from 'feathers-hooks-common';
+import { HookParams } from './hooks';
 import { Builder } from './interfaces';
+
+export { Filter } from './interfaces';
+export { AfterHook, AfterParams, BeforeHook, BeforeParams, HookParams, OutputHook,
+    ValidateHook } from './hooks';
 
 export interface ServiceLogger {
     /**
      * Called to log the execution duration of event processing. Duration is provided in
-     * milliseconds. If the .on() event handler is called with a third parameter, it is provided
-     * here as the listener parameter to distinguish between different handlers for the same event.
+     * milliseconds.
+     *
+     * NOTE: Events are only logged when the .on() event handler is called with a third parameter,
+     * which is provided here as listener to distinguish between different handlers for the same
+     * event.
      */
     logEvent?(app: Application, event: string, service: string, duration: number,
         listener?: string): void;
@@ -17,7 +25,8 @@ export interface ServiceLogger {
      *
      * Durations are provided in milliseconds.
      */
-    logHook?(hook: AnyParams<{}, Params>, duration: number, parallel?: Promise<number>): void;
+    logHook?(hook: HookParams<{}, Params>, name: string, duration: number,
+        parallel?: Promise<number>): void;
 
     /**
      * Called to log the execution duration of the provided method. If the method was called
@@ -31,34 +40,182 @@ export interface ServiceLogger {
         withHooks?: number): void;
 }
 
-type LoggedHook<I, P> = (hook: AnyParams<I, P>) => Promise<AnyParams<I, P>>;
+type LoggedHook<I, P> = (hook: HookParams<I, P>) => Promise<HookParams<I, P>>;
 
-function logHook<I, P extends Params>(hook: LoggedHook<I, P>, parallel?: Promise<number>): LoggedHook<I, P> {
-    if (_logger && _logger.logHook) {
-        return (actual: AnyParams<I, P>) => {
-            const start = process.hrtime();
-            const result = hook(actual);
-            Promise.resolve(result)
-                .then(newHook => {
-                    const [seconds, nano] = process.hrtime(start);
-                    const ms = seconds * 1000 + nano / 1000000;
-                    if (newHook) {
-                        _logger.logHook(newHook, ms, parallel);
-                    }
-                });
-            return result;
-        };
+let _globalLogger: ServiceLogger;
+
+export class ServiceBuilder {
+    _logger: ServiceLogger;
+
+    constructor(logger?: ServiceLogger) {
+        this._logger = logger || _globalLogger;
     }
-    return hook;
+
+    newService<T extends Object>(base?: T): Builder<T, Params> {
+        const service = Object.assign(base || {}, { events: [] });
+        let hooks: any = { before: {}, after: {} };
+        if (this._logger && this._logger.logMethod) {
+            const logger = this._logger;
+            hooks.before.all = [hook => {
+                hook.params._start = process.hrtime();
+                return Promise.resolve(hook);
+            }];
+            hooks.after.all = [hook => {
+                const [seconds, nano] = process.hrtime(hook.params._start);
+                const ms = seconds * 1000 + nano / 1000000;
+                logger.logMethod(hook.app, hook.params, `/${hook.path}`, hook.method,
+                    hook.params._duration, ms);
+                return Promise.resolve(hook);
+            }];
+        }
+        const filters = {};
+        let currentEvent: string;
+        let currentMethod: string;
+        let builtApp: Application;
+        let builtPath: string;
+        const setMethod: ((method: string, event?: string) => () => any) =
+            (method: string, event?: string) => () => {
+                currentMethod = method;
+                currentEvent = event;
+                return builder;
+            };
+        const builder = {
+            beforeAll: hook => {
+                hooks.before.all = hooks.before.all || [];
+                hooks.before.all.push(logHook(hook, this._logger));
+                return builder;
+            },
+            find: setMethod('find'),
+            get: setMethod('get'),
+            create: setMethod('create', 'created'),
+            update: setMethod('update', 'updated'),
+            patch: setMethod('patch', 'patched'),
+            remove: setMethod('remove', 'removed'),
+            before: (...beforeHooks) => {
+                hooks.before[currentMethod] = hooks.before[currentMethod] || [];
+                if (beforeHooks.length > 1) {
+                    hooks.before[currentMethod].push(runParallel(this._logger, beforeHooks));
+                } else {
+                    hooks.before[currentMethod].push(logHook(beforeHooks[0], this._logger));
+                }
+                return builder;
+            },
+            ignoresInput: method => builder.method(method),
+            validateInput: hook => builder.before(hook),
+            method: method => {
+                if (this._logger && this._logger.logMethod) {
+                    const logger = this._logger;
+                    const current = currentMethod;
+                    const logged = function(this: any, ...args) {
+                        const start = process.hrtime();
+                        const result = method.apply(this, args);
+                        const params = args[args.length - 2];
+                        result.then(() => {
+                            const [seconds, nano] = process.hrtime(start);
+                            const ms = seconds * 1000 + nano / 1000000;
+                            if (!params._start) {
+                                logger.logMethod(builtApp, params, builtPath, current, ms);
+                            } else {
+                                params._duration = ms;
+                            }
+                        });
+                        return result;
+                    };
+                    service[currentMethod] = logged;
+                } else {
+                    service[currentMethod] = method;
+                }
+                return builder;
+            },
+            internalOnly: method => builder.internalWithMessages(method).noMessages(),
+            internalWithMessages: method => {
+                hooks.before[currentMethod].shift(disallow('external'));
+                return builder.method(method);
+            },
+            filter: filter => {
+                filters[currentEvent] = filters[currentEvent] || [];
+                filters[currentEvent].push(filter);
+                return builder;
+            },
+            chainFilter: filter => builder.filter(filter),
+            customEventFilter: (event, filter) => {
+                currentEvent = event;
+                service.events.push(event);
+                return builder.filter(filter);
+            },
+            customEventInternal: event => {
+                service.events.push(event);
+                filters[event] = [() => false];
+                return builder;
+            },
+            noMessages: () => {
+                filters[currentEvent] = [() => false];
+                return builder;
+            },
+            convertOutput: (...outputHooks) => {
+                hooks.after[currentMethod] = hooks.after[currentMethod] || [];
+                outputHooks.forEach(hook =>
+                    hooks.after[currentMethod].push(logHook(hook, this._logger)));
+                return builder;
+            },
+            convertOutputSilent: (...outputHooks) =>
+                builder.noMessages().convertOutput(...outputHooks),
+            after: (...afterHooks) => {
+                hooks.after[currentMethod] = hooks.after[currentMethod] || [];
+                if (afterHooks.length > 1) {
+                    hooks.after[currentMethod].push(runParallel(this._logger, afterHooks));
+                } else {
+                    hooks.after[currentMethod].push(logHook(afterHooks[0], this._logger));
+                }
+                return builder;
+            },
+            afterAll: hook => {
+                hooks.after.all = hooks.after.all || [];
+                hooks.after.all.push(logHook(hook, this._logger));
+                return builder;
+            },
+            build: (path: string, app: Application) => {
+                app.use(path, <any>service);
+                const built: any = app.service(path);
+                built.hooks(hooks);
+                built.filter(filters);
+                builtApp = app;
+                builtPath = path;
+                if (this._logger && this._logger.logEvent) {
+                    const logger = this._logger;
+                    const originalOn = built.on;
+                    built.on = (event, callback, caller) => {
+                        const logged = data => {
+                            const start = process.hrtime();
+                            const result = Promise.resolve(callback.call(built, data));
+                            result.then(() => {
+                                const [seconds, nano] = process.hrtime(start);
+                                const ms = seconds * 1000 + nano / 1000000;
+                                    logger.logEvent(app, event, path, ms, caller);
+                            });
+                            return result;
+                        };
+                        return originalOn.call(built, event, caller ? logged : callback);
+                    };
+                    return built;
+                }
+            }
+        };
+        return builder;
+    }
+
+    static setGlobalLogger(logger: ServiceLogger): void {
+        _globalLogger = logger;
+    }
 }
 
-function runParallel(...args) {
+function runParallel(logger: ServiceLogger, hooks: any[]) {
     return function parallel(data) {
-        if (_logger) {
+        if (logger) {
             let resolve: ((val: number) => void);
             const promise: Promise<number> = new Promise(r => resolve = r);
             const start = process.hrtime();
-            return Promise.all(args.map(hook => logHook(hook, promise)(data)))
+            return Promise.all(hooks.map(hook => logHook(hook, logger, promise)(data)))
                 .then(() => {
                     const [seconds, nano] = process.hrtime(start);
                     const ms = seconds * 1000 + nano / 1000000;
@@ -66,149 +223,27 @@ function runParallel(...args) {
                     return data;
                 });
         }
-        return Promise.all(args.map(hook => hook(data)));
+        return Promise.all(hooks.map(hook => hook(data)))
+            .then(() => data);
     };
 }
 
-let _logger: ServiceLogger;
-
-export function setLogger(logger: ServiceLogger): void {
-    _logger = logger;
-}
-
-export function buildService<T extends Object>(base?: T): Builder<T, Params> {
-    const service = Object.assign(base || {}, { events: [] });
-    let hooks: any = { before: {}, after: {} };
-    if (_logger && _logger.logMethod) {
-        hooks.before.all = [hook => {
-            hook.params._start = process.hrtime();
-            return Promise.resolve(hook);
-        }];
-        hooks.after.all = [hook => {
-            const [seconds, nano] = process.hrtime(hook.params._start);
-            const ms = seconds * 1000 + nano / 1000000;
-            _logger.logMethod(hook.app, hook.params, `/${hook.path}`, hook.method,
-                hook.params.duration, ms);
-            return Promise.resolve(hook);
-        }];
-    }
-    const filters = {};
-    let currentEvent: string;
-    let currentMethod: string;
-    let builtApp: Application;
-    let builtPath: string;
-    const setMethod: ((method: string, event?: string) => () => any) =
-        (method: string, event?: string) => () => {
-            currentMethod = method;
-            currentEvent = event;
-            return builder;
+function logHook<I, P extends Params>(hook: LoggedHook<I, P>, logger?: ServiceLogger,
+    parallel?: Promise<number>): LoggedHook<I, P> {
+    if (logger && logger.logHook) {
+        return (actual: HookParams<I, P>) => {
+            const start = process.hrtime();
+            const result = hook(actual);
+            Promise.resolve(result)
+                .then(newHook => {
+                    const [seconds, nano] = process.hrtime(start);
+                    const ms = seconds * 1000 + nano / 1000000;
+                    if (newHook) {
+                        logger.logHook(newHook, hook.name || 'unknown', ms, parallel);
+                    }
+                });
+            return result;
         };
-    const builder = {
-        beforeAll: hook => {
-            hooks.before.all = hooks.before.all || [];
-            hooks.before.all.push(logHook(hook));
-            return builder;
-        },
-        find: setMethod('find'),
-        get: setMethod('get'),
-        create: setMethod('create', 'created'),
-        update: setMethod('update', 'updated'),
-        patch: setMethod('patch', 'patched'),
-        remove: setMethod('remove', 'removed'),
-        before: (...beforeHooks) => {
-            hooks.before[currentMethod] = hooks.before[currentMethod] || [];
-            if (beforeHooks.length > 1) {
-                hooks.before[currentMethod].push(runParallel(beforeHooks));
-            } else {
-                hooks.before[currentMethod].push(logHook(beforeHooks[0]));
-            }
-            return builder;
-        },
-        ignoresInput: method => builder.method(method),
-        validateInput: hook => builder.before(hook),
-        method: method => {
-            if (_logger && _logger.logMethod) {
-                const current = currentMethod;
-                const logged = function(this: any, ...args) {
-                    const start = process.hrtime();
-                    const result = method.apply(this, args);
-                    const params = args[args.length - 2];
-                    result.then(() => {
-                        const [seconds, nano] = process.hrtime(start);
-                        const ms = seconds * 1000 + nano / 1000000;
-                        if (!params.provider || !params._start) {
-                            _logger.logMethod(builtApp, params, builtPath, current, ms);
-                        } else {
-                            params._duration = ms;
-                        }
-                    });
-                    return result;
-                };
-                service[currentMethod] = logged;
-            } else {
-                service[currentMethod] = method;
-            }
-            return builder;
-        },
-        filter: filter => {
-            filters[currentEvent] = filters[currentEvent] || [];
-            filters[currentEvent].push(filter);
-            return builder;
-        },
-        customEventFilter: (event, filter) => {
-            currentEvent = event;
-            service.events.push(event);
-            return builder.filter(filter);
-        },
-        customEventInternal: event => {
-            service.events.push(event);
-            filters[event] = [() => false];
-            return builder;
-        },
-        noMessages: () => {
-            filters[currentEvent] = [() => false];
-            return builder;
-        },
-        after: (...afterHooks) => {
-            hooks.after[currentMethod] = hooks.after[currentMethod] || [];
-            if (afterHooks.length > 1) {
-                hooks.after[currentMethod].push(runParallel(afterHooks));
-            } else {
-                hooks.after[currentMethod].push(logHook(afterHooks[0]));
-            }
-            return builder;
-        },
-        apply: () => builder,
-        afterAll: hook => {
-            hooks.after.all = hooks.after.all || [];
-            hooks.after.all.push(logHook(hook));
-            return builder;
-        },
-        build: (path: string, app: Application) => {
-            app.use(path, <any>service);
-            const built: any = app.service(path);
-            built.hooks(hooks);
-            built.filter(filters);
-            builtApp = app;
-            builtPath = path;
-            if (_logger && _logger.logEvent) {
-                const originalOn = built.on;
-                built.on = (event, callback, caller) => {
-                    const logged = data => {
-                        const start = process.hrtime();
-                        const result = Promise.resolve(callback.call(built, data));
-                        result.then(() => {
-                            const [seconds, nano] = process.hrtime(start);
-                            const ms = seconds * 1000 + nano / 1000000;
-                                _logger.logEvent(app, event, path, ms, caller);
-                        });
-                        return result;
-                    };
-                    return originalOn.call(built, event, logged);
-                };
-                return built;
-            }
-        }
-    };
-    return builder;
+    }
+    return hook;
 }
