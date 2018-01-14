@@ -129,6 +129,7 @@ export class ServiceBuilder {
             },
             internalOnly: method => builder.internalWithMessages(method).noMessages(),
             internalWithMessages: method => {
+                hooks.before[currentMethod] = hooks.before[currentMethod] || [];
                 hooks.before[currentMethod].shift(disallow('external'));
                 return builder.method(method);
             },
@@ -197,8 +198,8 @@ export class ServiceBuilder {
                         };
                         return originalOn.call(built, event, caller ? logged : callback);
                     };
-                    return built;
                 }
+                return built;
             }
         };
         return builder;
