@@ -1,4 +1,4 @@
-import { Application } from 'feathers';
+import { Application } from '@feathersjs/feathers';
 
 export type HookResult<T> = Promise<T | void> | T | void;
 

@@ -1,4 +1,4 @@
-import { Application, Params } from 'feathers';
+import { Application, Params } from '@feathersjs/feathers';
 import { disallow } from 'feathers-hooks-common';
 import { HookParams } from './hooks';
 import { Builder } from './interfaces';
@@ -127,18 +127,16 @@ export class ServiceBuilder {
                 }
                 return builder;
             },
-            internalOnly: method => builder.internalWithMessages(method).noMessages(),
+            internalOnly: method => builder.internalWithMessages(method),
             internalWithMessages: method => {
                 hooks.before[currentMethod] = hooks.before[currentMethod] || [];
                 hooks.before[currentMethod].shift(disallow('external'));
                 return builder.method(method);
             },
             filter: filter => {
-                filters[currentEvent] = filters[currentEvent] || [];
-                filters[currentEvent].push(filter);
+                filters[currentEvent] = filter;
                 return builder;
             },
-            chainFilter: filter => builder.filter(filter),
             customEventFilter: (event, filter) => {
                 currentEvent = event;
                 service.events.push(event);
@@ -146,11 +144,6 @@ export class ServiceBuilder {
             },
             customEventInternal: event => {
                 service.events.push(event);
-                filters[event] = [() => false];
-                return builder;
-            },
-            noMessages: () => {
-                filters[currentEvent] = [() => false];
                 return builder;
             },
             convertOutput: (...outputHooks) => {
@@ -159,8 +152,7 @@ export class ServiceBuilder {
                     hooks.after[currentMethod].push(logHook(hook, this._logger)));
                 return builder;
             },
-            convertOutputSilent: (...outputHooks) =>
-                builder.noMessages().convertOutput(...outputHooks),
+            convertOutputSilent: (...outputHooks) => builder.convertOutput(...outputHooks),
             after: (...afterHooks) => {
                 hooks.after[currentMethod] = hooks.after[currentMethod] || [];
                 if (afterHooks.length > 1) {
@@ -179,7 +171,7 @@ export class ServiceBuilder {
                 app.use(path, <any>service);
                 const built: any = app.service(path);
                 built.hooks(hooks);
-                built.filter(filters);
+                Object.keys(filters).forEach(key => built.publish(key, filters[key]));
                 builtApp = app;
                 builtPath = path;
                 if (this._logger && this._logger.logEvent) {
