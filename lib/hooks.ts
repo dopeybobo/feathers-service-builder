@@ -15,6 +15,7 @@ export interface ValidateHook<I2, P> {
 }
 
 export interface BeforeHook<P, P2> {
+    (hook: BeforeParams<void, P>): HookResult<BeforeParams<void, P2>>;
     <I>(hook: BeforeParams<I, P>): HookResult<BeforeParams<I, P2>>;
 }
 
