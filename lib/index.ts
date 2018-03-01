@@ -3,7 +3,7 @@ import { disallow } from 'feathers-hooks-common';
 import { HookParams } from './hooks';
 import { Builder } from './interfaces';
 
-export { Filter } from './interfaces';
+export { Filter, TypedFilter } from './interfaces';
 export { AfterHook, AfterParams, BeforeHook, BeforeParams, HookParams, OutputHook,
     ValidateHook } from './hooks';
 
@@ -106,19 +106,17 @@ export class ServiceBuilder {
                 if (this._logger && this._logger.logMethod) {
                     const logger = this._logger;
                     const current = currentMethod;
-                    const logged = function(this: any, ...args) {
+                    const logged = async function(this: any, ...args) {
                         const start = process.hrtime();
-                        const result = method.apply(this, args);
-                        const params = args[args.length - 2];
-                        result.then(() => {
-                            const [seconds, nano] = process.hrtime(start);
-                            const ms = seconds * 1000 + nano / 1000000;
-                            if (!params._start) {
-                                logger.logMethod(builtApp, params, builtPath, current, ms);
-                            } else {
-                                params._duration = ms;
-                            }
-                        });
+                        const result = await method.apply(this, args);
+                        const params = args[args.length - 1];
+                        const [seconds, nano] = process.hrtime(start);
+                        const ms = seconds * 1000 + nano / 1000000;
+                        if (!params._start) {
+                            logger.logMethod(builtApp, params, builtPath, current, ms);
+                        } else {
+                            params._duration = ms;
+                        }
                         return result;
                     };
                     service[currentMethod] = logged;
@@ -130,13 +128,14 @@ export class ServiceBuilder {
             internalOnly: method => builder.internalWithMessages(method),
             internalWithMessages: method => {
                 hooks.before[currentMethod] = hooks.before[currentMethod] || [];
-                hooks.before[currentMethod].shift(disallow('external'));
+                hooks.before[currentMethod].unshift(disallow('external'));
                 return builder.method(method);
             },
             filter: filter => {
                 filters[currentEvent] = filter;
                 return builder;
             },
+            customEventMapped: (event, filter) => builder.customEventFilter(event, filter),
             customEventFilter: (event, filter) => {
                 currentEvent = event;
                 service.events.push(event);
@@ -178,14 +177,12 @@ export class ServiceBuilder {
                     const logger = this._logger;
                     const originalOn = built.on;
                     built.on = (event, callback, caller) => {
-                        const logged = data => {
+                        const logged = async data => {
                             const start = process.hrtime();
-                            const result = Promise.resolve(callback.call(built, data));
-                            result.then(() => {
-                                const [seconds, nano] = process.hrtime(start);
-                                const ms = seconds * 1000 + nano / 1000000;
-                                    logger.logEvent(app, event, path, ms, caller);
-                            });
+                            const result = await callback.call(built, data);
+                            const [seconds, nano] = process.hrtime(start);
+                            const ms = seconds * 1000 + nano / 1000000;
+                                logger.logEvent(app, event, path, ms, caller);
                             return result;
                         };
                         return originalOn.call(built, event, caller ? logged : callback);
@@ -203,21 +200,20 @@ export class ServiceBuilder {
 }
 
 function runParallel(logger: ServiceLogger, hooks: any[]) {
-    return function parallel(data) {
+    return async function parallel(data) {
         if (logger) {
             let resolve: ((val: number) => void);
             const promise: Promise<number> = new Promise(r => resolve = r);
             const start = process.hrtime();
-            return Promise.all(hooks.map(hook => logHook(hook, logger, promise)(data)))
-                .then(() => {
-                    const [seconds, nano] = process.hrtime(start);
-                    const ms = seconds * 1000 + nano / 1000000;
-                    resolve(ms);
-                    return data;
-                });
+            await Promise.all(hooks.map(hook => logHook(hook, logger, promise)(data)));
+
+            const [seconds, nano] = process.hrtime(start);
+            const ms = seconds * 1000 + nano / 1000000;
+            resolve(ms);
+            return data;
         }
-        return Promise.all(hooks.map(hook => hook(data)))
-            .then(() => data);
+        await Promise.all(hooks.map(hook => hook(data)));
+        return data;
     };
 }
 

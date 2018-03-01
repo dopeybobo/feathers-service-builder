@@ -1,7 +1,8 @@
-import { Application, Channel } from '@feathersjs/feathers';
+import { Application, Channel, TypedChannel } from '@feathersjs/feathers';
 import { AfterHook, AfterParams, BeforeHook, OutputHook, ValidateHook } from './hooks';
 
 export type Filter<I, P> = (data: I, hook: AfterParams<void, P, I>) => Channel;
+export type TypedFilter<I, O> = (data: I, hook: AfterParams<void, void, I>) => TypedChannel<O>;
 
 export interface FilteredBuilder<T, OP, P, O> {
     filter(filter: Filter<O, P>): Builder<T, OP>;
@@ -233,6 +234,8 @@ export interface ServiceProps {
 export interface CustomEventBuilder<S> {
     customEventFilter<E extends string, T>(event: E,
         filter: Filter<T, void>): CustomEventBuilder<S & MessageService<E, T>>;
+    customEventMapped<E extends string, I, O>(event: E,
+        filter: TypedFilter<I, O>): CustomEventBuilder<S & MessageService<E, O>>;
     customEventInternal<E extends string, T>(event: E): CustomEventBuilder<S & MessageService<E, T>>;
     build(path: string, app: Application): ServiceProps & S;
 }
