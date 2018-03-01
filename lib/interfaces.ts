@@ -98,7 +98,7 @@ export interface CreateBuilder<T, OP, P> {
     ignoresInput<O>(method: ((data: void, params: P) => Promise<O>)): CreateBuilderAfter<T, OP, {}, P, O>;
     internalOnly<I, O>(method: ((data: I, params: P) => Promise<O>)): Builder<T & CreateService<I, O>, OP>;
     internalWithMessages<I, O>(method: ((data: I, params: P) => Promise<O>)): FilteredBuilder<T & CreateServiceMessage<I, O>, OP, P, O>;
-    validateInput<I2>(hook: ValidateHook<I2, Partial<P>>): CreateBuilderValidated<T, OP, I2, P>;
+    validateInput<I2>(hook: ValidateHook<I2, Partial<P> | void>): CreateBuilderValidated<T, OP, I2, P>;
 }
 
 export interface CreateBuilderValidated<T, OP, I, P> {
@@ -107,7 +107,7 @@ export interface CreateBuilderValidated<T, OP, I, P> {
         hook2: BeforeHook<P, P3>): CreateBuilderValidated<T, OP, I, P & P2 & P3>;
     before<P2, P3, P4>(hook: BeforeHook<P, P2>, hook2: BeforeHook<P, P3>,
         hook3: BeforeHook<P, P4>): CreateBuilderValidated<T, OP, I, P & P2 & P3 & P4>;
-    validateInput<I2>(hook: ValidateHook<I2, Partial<P>>): CreateBuilderValidated<T, OP, I2, P>;
+    validateInput<I2>(hook: ValidateHook<I2, Partial<P> | void>): CreateBuilderValidated<T, OP, I2, P>;
     method<O>(method: ((data: I, params: P) => Promise<O>)): CreateBuilderAfter<T, OP, I, P, O>;
 }
 
@@ -135,7 +135,7 @@ export interface UpdateBuilder<T, OP, P> {
     ignoresInput<O>(method: ((id: string, data: void, params: P) => Promise<O>)): UpdateBuilderAfter<T, OP, {}, P, O>;
     internalOnly<I, O>(method: ((id: string, data: I, params: P) => Promise<O>)): Builder<T & UpdateService<I, O>, OP>;
     internalWithMessages<I, O>(method: ((id: string, data: I, params: P) => Promise<O>)): FilteredBuilder<T & UpdateServiceMessage<I, O>, OP, P, O>;
-    validateInput<I2>(hook: ValidateHook<I2, Partial<P>>): UpdateBuilderValidated<T, OP, I2, P>;
+    validateInput<I2>(hook: ValidateHook<I2, Partial<P> | void>): UpdateBuilderValidated<T, OP, I2, P>;
 }
 
 export interface UpdateBuilderValidated<T, OP, I, P> {
@@ -144,7 +144,7 @@ export interface UpdateBuilderValidated<T, OP, I, P> {
         hook2: BeforeHook<P, P3>): UpdateBuilderValidated<T, OP, I, P & P2 & P3>;
     before<P2, P3, P4>(hook: BeforeHook<P, P2>, hook2: BeforeHook<P, P3>,
         hook3: BeforeHook<P, P4>): UpdateBuilderValidated<T, OP, I, P & P2 & P3 & P4>;
-    validateInput<I2>(hook: ValidateHook<I2, Partial<P>>): UpdateBuilderValidated<T, OP, I2, P>;
+    validateInput<I2>(hook: ValidateHook<I2, Partial<P> | void>): UpdateBuilderValidated<T, OP, I2, P>;
     method<O>(method: ((id: string, data: I, params: P) => Promise<O>)): UpdateBuilderAfter<T, OP, I, P, O>;
 }
 
@@ -172,7 +172,7 @@ export interface PatchBuilder<T, OP, P> {
     ignoresInput<O>(method: ((id: string, data: void, params: P) => Promise<O>)): PatchBuilderAfter<T, OP, {}, P, O>;
     internalOnly<I, O>(method: ((id: string, data: I, params: P) => Promise<O>)): Builder<T & PatchService<I, O>, OP>;
     internalWithMessages<I, O>(method: ((id: string, data: I, params: P) => Promise<O>)): FilteredBuilder<T & PatchServiceMessage<I, O>, OP, P, O>;
-    validateInput<I2>(hook: ValidateHook<I2, Partial<P>>): PatchBuilderValidated<T, OP, I2, P>;
+    validateInput<I2>(hook: ValidateHook<I2, Partial<P> | void>): PatchBuilderValidated<T, OP, I2, P>;
 }
 
 export interface PatchBuilderValidated<T, OP, I, P> {
@@ -181,7 +181,7 @@ export interface PatchBuilderValidated<T, OP, I, P> {
         hook2: BeforeHook<P, P3>): PatchBuilderValidated<T, OP, I, P & P2 & P3>;
     before<P2, P3, P4>(hook: BeforeHook<P, P2>, hook2: BeforeHook<P, P3>,
         hook3: BeforeHook<P, P4>): PatchBuilderValidated<T, OP, I, P & P2 & P3 & P4>;
-    validateInput<I2>(hook: ValidateHook<I2, Partial<P>>): PatchBuilderValidated<T, OP, I2, P>;
+    validateInput<I2>(hook: ValidateHook<I2, Partial<P> | void>): PatchBuilderValidated<T, OP, I2, P>;
     method<O>(method: ((id: string, data: I, params: P) => Promise<O>)): PatchBuilderAfter<T, OP, I, P, O>;
 }
 

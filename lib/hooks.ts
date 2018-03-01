@@ -10,7 +10,7 @@ export interface OutputHook<P, P2, O, O2, I> {
     (hook: AfterParams<I, P, O>): HookResult<AfterParams<I, P2, O2>>;
 }
 
-export interface ValidateHook<I2, P> {
+export interface ValidateHook<I2, P = void> {
     (hook: BeforeParams<void, P>): HookResult<BeforeParams<I2, P>>;
 }
 
