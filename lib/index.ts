@@ -1,10 +1,10 @@
 import { Application, Params } from '@feathersjs/feathers';
 import { disallow } from 'feathers-hooks-common';
-import { HookParams } from './hooks';
+import { HookContext } from './hooks';
 import { Builder } from './interfaces';
 
-export { Filter, TypedFilter } from './interfaces';
-export { AfterHook, AfterParams, BeforeHook, BeforeParams, HookParams, OutputHook,
+export { Publisher, MappedPublisher } from './interfaces';
+export { AfterHook, AfterContext, BeforeHook, BeforeContext, HookContext, OutputHook,
     ValidateHook } from './hooks';
 
 export interface ServiceLogger {
@@ -25,7 +25,7 @@ export interface ServiceLogger {
      *
      * Durations are provided in milliseconds.
      */
-    logHook?(hook: HookParams<{}, Params>, name: string, duration: number,
+    logHook?(hook: HookContext<{}, Params>, name: string, duration: number,
         parallel?: Promise<number>): void;
 
     /**
@@ -40,7 +40,7 @@ export interface ServiceLogger {
         withHooks?: number): void;
 }
 
-type LoggedHook<I, P> = (hook: HookParams<I, P>) => Promise<HookParams<I, P>>;
+type LoggedHook<I, P> = (hook: HookContext<I, P>) => Promise<HookContext<I, P>>;
 
 let _globalLogger: ServiceLogger;
 
@@ -68,7 +68,7 @@ export class ServiceBuilder {
                 return Promise.resolve(hook);
             }];
         }
-        const filters = {};
+        const publishers = {};
         let currentEvent: string;
         let currentMethod: string;
         let builtApp: Application;
@@ -125,33 +125,38 @@ export class ServiceBuilder {
                 }
                 return builder;
             },
-            internalOnly: method => builder.internalWithMessages(method),
-            internalWithMessages: method => {
+            internalOnly: method => builder.internalPublished(method),
+            internalPublished: method => {
                 hooks.before[currentMethod] = hooks.before[currentMethod] || [];
                 hooks.before[currentMethod].unshift(disallow('external'));
                 return builder.method(method);
             },
-            filter: filter => {
-                filters[currentEvent] = filter;
+            publishTo: publisher => {
+                publishers[currentEvent] = publisher;
                 return builder;
             },
-            customEventMapped: (event, filter) => builder.customEventFilter(event, filter),
-            customEventFilter: (event, filter) => {
+            customEventMapped: (event, publisher) => builder.customEventPublisher(event, publisher),
+            customEventPublisher: (event, publisher) => {
                 currentEvent = event;
                 service.events.push(event);
-                return builder.filter(filter);
+                return builder.publishTo(publisher);
             },
-            customEventInternal: event => {
-                service.events.push(event);
-                return builder;
+            customEventInternal: () => builder,
+            format: formatter => {
+                const formatHook = hook => {
+                    hook.result = formatter(hook.result);
+                    return Promise.resolve(hook);
+                };
+                return builder.formatHook(formatHook);
             },
-            convertOutput: (...outputHooks) => {
+            formatHook: (...outputHooks) => {
                 hooks.after[currentMethod] = hooks.after[currentMethod] || [];
                 outputHooks.forEach(hook =>
                     hooks.after[currentMethod].push(logHook(hook, this._logger)));
                 return builder;
             },
-            convertOutputSilent: (...outputHooks) => builder.convertOutput(...outputHooks),
+            silent: () => builder,
+            unformatted: () => builder,
             after: (...afterHooks) => {
                 hooks.after[currentMethod] = hooks.after[currentMethod] || [];
                 if (afterHooks.length > 1) {
@@ -170,7 +175,7 @@ export class ServiceBuilder {
                 app.use(path, <any>service);
                 const built: any = app.service(path);
                 built.hooks(hooks);
-                Object.keys(filters).forEach(key => built.publish(key, filters[key]));
+                Object.keys(publishers).forEach(key => built.publish(key, publishers[key]));
                 builtApp = app;
                 builtPath = path;
                 if (this._logger && this._logger.logEvent) {
@@ -220,7 +225,7 @@ function runParallel(logger: ServiceLogger, hooks: any[]) {
 function logHook<I, P extends Params>(hook: LoggedHook<I, P>, logger?: ServiceLogger,
     parallel?: Promise<number>): LoggedHook<I, P> {
     if (logger && logger.logHook) {
-        return (actual: HookParams<I, P>) => {
+        return (actual: HookContext<I, P>) => {
             const start = process.hrtime();
             const result = hook(actual);
             Promise.resolve(result)

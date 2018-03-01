@@ -1,16 +1,16 @@
 import { Application, Channel, TypedChannel } from '@feathersjs/feathers';
-import { AfterHook, AfterParams, BeforeHook, OutputHook, ValidateHook } from './hooks';
+import { AfterHook, AfterContext, BeforeHook, OutputHook, ValidateHook } from './hooks';
 
-export type Filter<I, P> = (data: I, hook: AfterParams<void, P, I>) => Channel;
-export type TypedFilter<I, O> = (data: I, hook: AfterParams<void, void, I>) => TypedChannel<O>;
+export type Publisher<I, P> = (data: I, hook: AfterContext<void, P, I>) => Channel;
+export type MappedPublisher<I, O> = (data: I, hook: AfterContext<void, void, I>) => TypedChannel<O>;
 
-export interface FilteredBuilder<T, OP, P, O> {
-    filter(filter: Filter<O, P>): Builder<T, OP>;
+export interface PublisherBuilder<T, OP, P, O> {
+    publishTo(publisher: Publisher<O, P>): Builder<T, OP>;
 }
 
 export interface MessageService<E extends string, O> {
     emit(method: E, data: O): void;
-    on(message: E, callback: ((data: O) => Promise<void>), caller?: string): void;
+    on(message: E, callback: ((data: O) => void), caller?: string): void;
 }
 
 export interface FindService<O> {
@@ -62,9 +62,11 @@ export interface FindBuilderAfter<T, OP, P, O> {
     after<P2, P3, P4>(hook: AfterHook<P, P2, O | void, void>,
         hook2: AfterHook<P, P3, O | void, void>,
         hook3: AfterHook<P, P4, O | void, void>): FindBuilderAfter<T, OP, P & P2 & P3 & P4, O>;
-    convertOutput<O2>(hook: OutputHook<Partial<P>, any, O, O2, void>): Builder<T & FindService<O2>, OP>;
-    convertOutput<P2, O2, O3>(hook: OutputHook<Partial<P>, P2, O, O2, void>,
+    format<O2>(formatter: (data: O) => O2): Builder<T & FindService<O2>, OP>;
+    formatHook<O2>(hook: OutputHook<Partial<P>, any, O, O2, void>): Builder<T & FindService<O2>, OP>;
+    formatHook<P2, O2, O3>(hook: OutputHook<Partial<P>, P2, O, O2, void>,
         hook2: OutputHook<Partial<P & P2>, any, O2, O3, void>): Builder<T & FindService<O3>, OP>;
+    unformatted(): Builder<T & FindService<O>, OP>;
 }
 
 export interface GetBuilder<T, OP, P> {
@@ -84,9 +86,11 @@ export interface GetBuilderAfter<T, OP, P, O> {
     after<P2, P3, P4>(hook: AfterHook<P, P2, O | void, void>,
         hook2: AfterHook<P, P3, O | void, void>,
         hook3: AfterHook<P, P4, O | void, void>): GetBuilderAfter<T, OP, P & P2 & P3 & P4, O>;
-    convertOutput<O2>(hook: OutputHook<Partial<P>, any, O, O2, void>): Builder<T & GetService<O2>, OP>;
-    convertOutput<P2, O2, O3>(hook: OutputHook<Partial<P>, P2, O, O2, void>,
+    format<O2>(formatter: (data: O) => O2): Builder<T & GetService<O2>, OP>;
+    formatHook<O2>(hook: OutputHook<Partial<P>, any, O, O2, void>): Builder<T & GetService<O2>, OP>;
+    formatHook<P2, O2, O3>(hook: OutputHook<Partial<P>, P2, O, O2, void>,
         hook2: OutputHook<Partial<P & P2>, any, O2, O3, void>): Builder<T & GetService<O3>, OP>;
+    unformatted(): Builder<T & GetService<O>, OP>;
 }
 
 export interface CreateBuilder<T, OP, P> {
@@ -97,7 +101,7 @@ export interface CreateBuilder<T, OP, P> {
         hook3: BeforeHook<P, P4>): CreateBuilder<T, OP, P & P2 & P3 & P4>;
     ignoresInput<O>(method: ((data: void, params: P) => Promise<O>)): CreateBuilderAfter<T, OP, {}, P, O>;
     internalOnly<I, O>(method: ((data: I, params: P) => Promise<O>)): Builder<T & CreateService<I, O>, OP>;
-    internalWithMessages<I, O>(method: ((data: I, params: P) => Promise<O>)): FilteredBuilder<T & CreateServiceMessage<I, O>, OP, P, O>;
+    internalPublished<I, O>(method: ((data: I, params: P) => Promise<O>)): PublisherBuilder<T & CreateServiceMessage<I, O>, OP, P, O>;
     validateInput<I2>(hook: ValidateHook<I2, Partial<P> | void>): CreateBuilderValidated<T, OP, I2, P>;
 }
 
@@ -107,6 +111,8 @@ export interface CreateBuilderValidated<T, OP, I, P> {
         hook2: BeforeHook<P, P3>): CreateBuilderValidated<T, OP, I, P & P2 & P3>;
     before<P2, P3, P4>(hook: BeforeHook<P, P2>, hook2: BeforeHook<P, P3>,
         hook3: BeforeHook<P, P4>): CreateBuilderValidated<T, OP, I, P & P2 & P3 & P4>;
+    internalOnly<O>(method: ((data: I, params: P) => Promise<O>)): Builder<T & CreateService<I, O>, OP>;
+    internalPublished<O>(method: ((data: I, params: P) => Promise<O>)): PublisherBuilder<T & CreateServiceMessage<I, O>, OP, P, O>;
     validateInput<I2>(hook: ValidateHook<I2, Partial<P> | void>): CreateBuilderValidated<T, OP, I2, P>;
     method<O>(method: ((data: I, params: P) => Promise<O>)): CreateBuilderAfter<T, OP, I, P, O>;
 }
@@ -118,12 +124,15 @@ export interface CreateBuilderAfter<T, OP, I, P, O> {
     after<P2, P3, P4>(hook: AfterHook<P, P2, O | void, I | void>,
         hook2: AfterHook<P, P3, O | void, I | void>,
         hook3: AfterHook<P, P4, O | void, I | void>): CreateBuilderAfter<T, OP, I, P & P2 & P3 & P4, O>;
-    convertOutput<P2, O2>(hook: OutputHook<Partial<P>, P2, O, O2, I | void>): FilteredBuilder<T & CreateServiceMessage<I, O2>, OP, P & P2, O2>;
-    convertOutput<P2, O2, P3, O3>(hook: OutputHook<Partial<P>, P2, O, O2, I | void>,
-        hook2: OutputHook<Partial<P & P2>, P3, O2, O3, I | void>): FilteredBuilder<T & CreateServiceMessage<I, O3>, OP, P & P2 & P3, O3>;
-    convertOutputSilent<O2>(hook: OutputHook<Partial<P>, any, O, O2, I | void>): Builder<T & CreateService<I, O2>, OP>;
-    convertOutputSilent<P2, O2, O3>(hook: OutputHook<Partial<P>, P2, O, O2, I | void>,
-        hook2: OutputHook<Partial<P & P2>, any, O2, O3, I | void>): Builder<T & CreateService<I, O3>, OP>;
+    format<O2>(formatter: (data: O) => O2): CreateBuilderFormatted<T, OP, I, P, O2>;
+    formatHook<P2, O2>(hook: OutputHook<Partial<P>, P2, O, O2, I | void>): CreateBuilderFormatted<T, OP, I, P & P2, O2>
+    formatHook<P2, O2, P3, O3>(hook: OutputHook<Partial<P>, P2, O, O2, I | void>,
+        hook2: OutputHook<Partial<P & P2>, P3, O2, O3, I | void>): CreateBuilderFormatted<T, OP, I, P & P2 & P3, O3>;
+    unformatted(): CreateBuilderFormatted<T, OP, I, P, O>;
+}
+
+export interface CreateBuilderFormatted<T, OP, I, P, O> extends PublisherBuilder<T & CreateServiceMessage<I, O>, OP, P, O> {
+    silent(): Builder<T & CreateService<I, O>, OP>;
 }
 
 export interface UpdateBuilder<T, OP, P> {
@@ -134,7 +143,7 @@ export interface UpdateBuilder<T, OP, P> {
         hook3: BeforeHook<P, P4>): UpdateBuilder<T, OP, P & P2 & P3 & P4>;
     ignoresInput<O>(method: ((id: string, data: void, params: P) => Promise<O>)): UpdateBuilderAfter<T, OP, {}, P, O>;
     internalOnly<I, O>(method: ((id: string, data: I, params: P) => Promise<O>)): Builder<T & UpdateService<I, O>, OP>;
-    internalWithMessages<I, O>(method: ((id: string, data: I, params: P) => Promise<O>)): FilteredBuilder<T & UpdateServiceMessage<I, O>, OP, P, O>;
+    internalPublished<I, O>(method: ((id: string, data: I, params: P) => Promise<O>)): PublisherBuilder<T & UpdateServiceMessage<I, O>, OP, P, O>;
     validateInput<I2>(hook: ValidateHook<I2, Partial<P> | void>): UpdateBuilderValidated<T, OP, I2, P>;
 }
 
@@ -144,6 +153,8 @@ export interface UpdateBuilderValidated<T, OP, I, P> {
         hook2: BeforeHook<P, P3>): UpdateBuilderValidated<T, OP, I, P & P2 & P3>;
     before<P2, P3, P4>(hook: BeforeHook<P, P2>, hook2: BeforeHook<P, P3>,
         hook3: BeforeHook<P, P4>): UpdateBuilderValidated<T, OP, I, P & P2 & P3 & P4>;
+    internalOnly<O>(method: ((id: string, data: I, params: P) => Promise<O>)): Builder<T & UpdateService<I, O>, OP>;
+    internalPublished<O>(method: ((id: string, data: I, params: P) => Promise<O>)): PublisherBuilder<T & UpdateServiceMessage<I, O>, OP, P, O>;
     validateInput<I2>(hook: ValidateHook<I2, Partial<P> | void>): UpdateBuilderValidated<T, OP, I2, P>;
     method<O>(method: ((id: string, data: I, params: P) => Promise<O>)): UpdateBuilderAfter<T, OP, I, P, O>;
 }
@@ -155,12 +166,15 @@ export interface UpdateBuilderAfter<T, OP, I, P, O> {
     after<P2, P3, P4>(hook: AfterHook<P, P2, O | void, I | void>,
         hook2: AfterHook<P, P3, O | void, I | void>,
         hook3: AfterHook<P, P4, O | void, I | void>): UpdateBuilderAfter<T, OP, I, P & P2 & P3 & P4, O>;
-    convertOutput<P2, O2>(hook: OutputHook<Partial<P>, P2, O, O2, I | void>): FilteredBuilder<T & UpdateServiceMessage<I, O2>, OP, P & P2, O2>;
-    convertOutput<P2, O2, P3, O3>(hook: OutputHook<Partial<P>, P2, O, O2, I | void>,
-        hook2: OutputHook<Partial<P & P2>, P3, O2, O3, I | void>): FilteredBuilder<T & UpdateServiceMessage<I, O3>, OP, P & P2 & P3, O3>;
-    convertOutputSilent<O2>(hook: OutputHook<Partial<P>, any, O, O2, I | void>): Builder<T & UpdateService<I, O2>, OP>;
-    convertOutputSilent<P2, O2, O3>(hook: OutputHook<Partial<P>, P2, O, O2, I | void>,
-        hook2: OutputHook<Partial<P & P2>, any, O2, O3, I | void>): Builder<T & UpdateService<I, O3>, OP>;
+    format<O2>(formatter: (data: O) => O2): UpdateBuilderFormatted<T, OP, I, P, O2>;
+    formatHook<P2, O2>(hook: OutputHook<Partial<P>, P2, O, O2, I | void>): UpdateBuilderFormatted<T, OP, I, P & P2, O2>
+    formatHook<P2, O2, P3, O3>(hook: OutputHook<Partial<P>, P2, O, O2, I | void>,
+        hook2: OutputHook<Partial<P & P2>, P3, O2, O3, I | void>): UpdateBuilderFormatted<T, OP, I, P & P2 & P3, O3>;
+    unformatted(): UpdateBuilderFormatted<T, OP, I, P, O>;
+}
+
+export interface UpdateBuilderFormatted<T, OP, I, P, O> extends PublisherBuilder<T & UpdateServiceMessage<I, O>, OP, P, O> {
+    silent(): Builder<T & UpdateService<I, O>, OP>;
 }
 
 export interface PatchBuilder<T, OP, P> {
@@ -171,7 +185,7 @@ export interface PatchBuilder<T, OP, P> {
         hook3: BeforeHook<P, P4>): PatchBuilder<T, OP, P & P2 & P3 & P4>;
     ignoresInput<O>(method: ((id: string, data: void, params: P) => Promise<O>)): PatchBuilderAfter<T, OP, {}, P, O>;
     internalOnly<I, O>(method: ((id: string, data: I, params: P) => Promise<O>)): Builder<T & PatchService<I, O>, OP>;
-    internalWithMessages<I, O>(method: ((id: string, data: I, params: P) => Promise<O>)): FilteredBuilder<T & PatchServiceMessage<I, O>, OP, P, O>;
+    internalPublished<I, O>(method: ((id: string, data: I, params: P) => Promise<O>)): PublisherBuilder<T & PatchServiceMessage<I, O>, OP, P, O>;
     validateInput<I2>(hook: ValidateHook<I2, Partial<P> | void>): PatchBuilderValidated<T, OP, I2, P>;
 }
 
@@ -181,6 +195,8 @@ export interface PatchBuilderValidated<T, OP, I, P> {
         hook2: BeforeHook<P, P3>): PatchBuilderValidated<T, OP, I, P & P2 & P3>;
     before<P2, P3, P4>(hook: BeforeHook<P, P2>, hook2: BeforeHook<P, P3>,
         hook3: BeforeHook<P, P4>): PatchBuilderValidated<T, OP, I, P & P2 & P3 & P4>;
+    internalOnly<O>(method: ((id: string, data: I, params: P) => Promise<O>)): Builder<T & PatchService<I, O>, OP>;
+    internalPublished<O>(method: ((id: string, data: I, params: P) => Promise<O>)): PublisherBuilder<T & PatchServiceMessage<I, O>, OP, P, O>;
     validateInput<I2>(hook: ValidateHook<I2, Partial<P> | void>): PatchBuilderValidated<T, OP, I2, P>;
     method<O>(method: ((id: string, data: I, params: P) => Promise<O>)): PatchBuilderAfter<T, OP, I, P, O>;
 }
@@ -192,12 +208,15 @@ export interface PatchBuilderAfter<T, OP, I, P, O> {
     after<P2, P3, P4>(hook: AfterHook<P, P2, O | void, I | void>,
         hook2: AfterHook<P, P3, O | void, I | void>,
         hook3: AfterHook<P, P4, O | void, I | void>): PatchBuilderAfter<T, OP, I, P & P2 & P3 & P4, O>;
-    convertOutput<P2, O2>(hook: OutputHook<Partial<P>, P2, O, O2, I | void>): FilteredBuilder<T & PatchServiceMessage<I, O2>, OP, P & P2, O2>;
-    convertOutput<P2, O2, P3, O3>(hook: OutputHook<Partial<P>, P2, O, O2, I | void>,
-        hook2: OutputHook<Partial<P & P2>, P3, O2, O3, I | void>): FilteredBuilder<T & PatchServiceMessage<I, O3>, OP, P & P2 & P3, O3>;
-    convertOutputSilent<O2>(hook: OutputHook<Partial<P>, any, O, O2, I | void>): Builder<T & PatchService<I, O2>, OP>;
-    convertOutputSilent<P2, O2, O3>(hook: OutputHook<Partial<P>, P2, O, O2, I | void>,
-        hook2: OutputHook<Partial<P & P2>, any, O2, O3, I | void>): Builder<T & PatchService<I, O3>, OP>;
+    format<O2>(formatter: (data: O) => O2): PatchBuilderFormatted<T, OP, I, P, O2>;
+    formatHook<P2, O2>(hook: OutputHook<Partial<P>, P2, O, O2, I | void>): PatchBuilderFormatted<T, OP, I, P & P2, O2>
+    formatHook<P2, O2, P3, O3>(hook: OutputHook<Partial<P>, P2, O, O2, I | void>,
+        hook2: OutputHook<Partial<P & P2>, P3, O2, O3, I | void>): PatchBuilderFormatted<T, OP, I, P & P2 & P3, O3>;
+    unformatted(): PatchBuilderFormatted<T, OP, I, P, O>;
+}
+
+export interface PatchBuilderFormatted<T, OP, I, P, O> extends PublisherBuilder<T & PatchServiceMessage<I, O>, OP, P, O> {
+    silent(): Builder<T & PatchService<I, O>, OP>;
 }
 
 export interface RemoveBuilder<T, OP, P> {
@@ -207,7 +226,7 @@ export interface RemoveBuilder<T, OP, P> {
     before<P2, P3, P4>(hook: BeforeHook<P, P2>, hook2: BeforeHook<P, P3>,
         hook3: BeforeHook<P, P4>): RemoveBuilder<T, OP, P & P2 & P3 & P4>;
     internalOnly<O>(method: ((id: string, params: P) => Promise<O>)): Builder<T & RemoveService<O>, OP>;
-    internalWithMessages<O>(method: ((id: string, params: P) => Promise<O>)): FilteredBuilder<T & RemoveServiceMessage<O>, OP, P, O>;
+    internalPublished<O>(method: ((id: string, params: P) => Promise<O>)): PublisherBuilder<T & RemoveServiceMessage<O>, OP, P, O>;
     method<O>(method: ((id: string, params: P) => Promise<O>)): RemoveBuilderAfter<T, OP, P, O>;
 }
 
@@ -218,12 +237,15 @@ export interface RemoveBuilderAfter<T, OP, P, O> {
     after<P2, P3, P4>(hook: AfterHook<P, P2, O | void, void>,
         hook2: AfterHook<P, P3, O | void, void>,
         hook3: AfterHook<P, P4, O | void, void>): RemoveBuilderAfter<T, OP, P & P2 & P3 & P4, O>;
-    convertOutput<P2, O2>(hook: OutputHook<Partial<P>, P2, O, O2, void>): FilteredBuilder<T & RemoveServiceMessage<O2>, OP, P & P2, O2>;
-    convertOutput<P2, O2, P3, O3>(hook: OutputHook<Partial<P>, P2, O, O2, void>,
-        hook2: OutputHook<Partial<P & P2>, P3, O2, O3, void>): FilteredBuilder<T & RemoveServiceMessage<O3>, OP, P & P2 & P3, O3>;
-    convertOutputSilent<O2>(hook: OutputHook<Partial<P>, any, O, O2, void>): Builder<T & RemoveService<O2>, OP>;
-    convertOutputSilent<P2, O2, O3>(hook: OutputHook<Partial<P>, P2, O, O2, void>,
-        hook2: OutputHook<Partial<P & P2>, any, O2, O3, void>): Builder<T & RemoveService<O3>, OP>;
+    format<O2>(formatter: (data: O) => O2): RemoveBuilderFormatted<T, OP, P, O2>;
+    formatHook<P2, O2>(hook: OutputHook<Partial<P>, P2, O, O2, void>): RemoveBuilderFormatted<T, OP, P & P2, O2>
+    formatHook<P2, O2, P3, O3>(hook: OutputHook<Partial<P>, P2, O, O2, void>,
+        hook2: OutputHook<Partial<P & P2>, P3, O2, O3, void>): RemoveBuilderFormatted<T, OP, P & P2 & P3, O3>;
+    unformatted(): RemoveBuilderFormatted<T, OP, P, O>;
+}
+
+export interface RemoveBuilderFormatted<T, OP, P, O> extends PublisherBuilder<T & RemoveServiceMessage<O>, OP, P, O> {
+    silent(): Builder<T & RemoveService<O>, OP>;
 }
 
 export interface ServiceProps {
@@ -232,10 +254,10 @@ export interface ServiceProps {
 }
 
 export interface CustomEventBuilder<S> {
-    customEventFilter<E extends string, T>(event: E,
-        filter: Filter<T, void>): CustomEventBuilder<S & MessageService<E, T>>;
+    customEventPublisher<E extends string, T>(event: E,
+        publisher: Publisher<T, void>): CustomEventBuilder<S & MessageService<E, T>>;
     customEventMapped<E extends string, I, O>(event: E,
-        filter: TypedFilter<I, O>): CustomEventBuilder<S & MessageService<E, O>>;
+        publisher: MappedPublisher<I, O>): CustomEventBuilder<S & MessageService<E, O>>;
     customEventInternal<E extends string, T>(event: E): CustomEventBuilder<S & MessageService<E, T>>;
     build(path: string, app: Application): ServiceProps & S;
 }
