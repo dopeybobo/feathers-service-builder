@@ -10,8 +10,8 @@ export interface OutputHook<P, P2, O, O2, I> {
     (hook: AfterContext<I, P, O>): HookResult<AfterContext<I, P2, O2>>;
 }
 
-export interface ValidateHook<I2, P = void> {
-    (hook: BeforeContext<void, P>): HookResult<BeforeContext<I2, P>>;
+export interface ValidateHook<I, P = void> {
+    (hook: BeforeContext<I, P>): HookResult<BeforeContext<I, P>>;
 }
 
 export interface BeforeHook<P, P2> {

@@ -113,7 +113,7 @@ export interface CreateBuilderValidated<T, OP, I, P> {
         hook3: BeforeHook<P, P4>): CreateBuilderValidated<T, OP, I, P & P2 & P3 & P4>;
     internalOnly<O>(method: ((data: I, params: P) => Promise<O>)): Builder<T & CreateService<I, O>, OP>;
     internalPublished<O>(method: ((data: I, params: P) => Promise<O>)): PublisherBuilder<T & CreateServiceMessage<I, O>, OP, P, O>;
-    validateInput<I2>(hook: ValidateHook<I2, Partial<P> | void>): CreateBuilderValidated<T, OP, I2, P>;
+    validateInput<I2>(hook: ValidateHook<I2, Partial<P> | void>): CreateBuilderValidated<T, OP, I & I2, P>;
     method<O>(method: ((data: I, params: P) => Promise<O>)): CreateBuilderAfter<T, OP, I, P, O>;
 }
 
@@ -155,7 +155,7 @@ export interface UpdateBuilderValidated<T, OP, I, P> {
         hook3: BeforeHook<P, P4>): UpdateBuilderValidated<T, OP, I, P & P2 & P3 & P4>;
     internalOnly<O>(method: ((id: string, data: I, params: P) => Promise<O>)): Builder<T & UpdateService<I, O>, OP>;
     internalPublished<O>(method: ((id: string, data: I, params: P) => Promise<O>)): PublisherBuilder<T & UpdateServiceMessage<I, O>, OP, P, O>;
-    validateInput<I2>(hook: ValidateHook<I2, Partial<P> | void>): UpdateBuilderValidated<T, OP, I2, P>;
+    validateInput<I2>(hook: ValidateHook<I2, Partial<P> | void>): UpdateBuilderValidated<T, OP, I & I2, P>;
     method<O>(method: ((id: string, data: I, params: P) => Promise<O>)): UpdateBuilderAfter<T, OP, I, P, O>;
 }
 
@@ -197,7 +197,7 @@ export interface PatchBuilderValidated<T, OP, I, P> {
         hook3: BeforeHook<P, P4>): PatchBuilderValidated<T, OP, I, P & P2 & P3 & P4>;
     internalOnly<O>(method: ((id: string, data: I, params: P) => Promise<O>)): Builder<T & PatchService<I, O>, OP>;
     internalPublished<O>(method: ((id: string, data: I, params: P) => Promise<O>)): PublisherBuilder<T & PatchServiceMessage<I, O>, OP, P, O>;
-    validateInput<I2>(hook: ValidateHook<I2, Partial<P> | void>): PatchBuilderValidated<T, OP, I2, P>;
+    validateInput<I2>(hook: ValidateHook<I2, Partial<P> | void>): PatchBuilderValidated<T, OP, I & I2, P>;
     method<O>(method: ((id: string, data: I, params: P) => Promise<O>)): PatchBuilderAfter<T, OP, I, P, O>;
 }
 
