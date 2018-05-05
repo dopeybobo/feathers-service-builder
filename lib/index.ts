@@ -101,7 +101,7 @@ export class ServiceBuilder {
                 return builder;
             },
             ignoresInput: method => builder.method(method),
-            validateInput: hook => builder.before(hook),
+            validateInput: (...hooks) => builder.before(...hooks),
             method: method => {
                 if (this._logger && this._logger.logMethod) {
                     const logger = this._logger;
