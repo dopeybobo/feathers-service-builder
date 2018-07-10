@@ -6,8 +6,10 @@ export type Merge3<T, U, V> = T extends void ? Merge2<U, V> : T & Merge2<U, V>;
 export type Merge4<T, U, V, W> = T extends void ? Merge3<U, V, W> : T & Merge3<U, V, W>;
 export type Merge5<T, U, V, W, X> = T extends void ? Merge4<U, V, W, X> : T & Merge4<U, V, W, X>;
 
-export type Publisher<I, P> = (data: I, hook: AfterContext<void, P, I>) => Channel;
-export type MappedPublisher<I, O> = (data: I, hook: AfterContext<void, void, I>) => TypedChannel<O>;
+export type Publisher<I, P> =
+    (data: I, hook: AfterContext<void, P, I>) => Channel | Promise<Channel>;
+export type MappedPublisher<I, O> =
+    (data: I, hook: AfterContext<void, void, I>) => TypedChannel<O> | Promise<TypedChannel<O>>;
 
 export interface PublisherBuilder<T, OP, P, O> {
     publishTo(publisher: Publisher<O, P>): Builder<T, OP>;
