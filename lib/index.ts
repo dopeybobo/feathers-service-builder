@@ -16,7 +16,7 @@ export interface ServiceLogger {
      * which is provided here as listener to distinguish between different handlers for the same
      * event.
      */
-    logEvent?(app: Application, event: string, service: string, duration: number,
+    logEvent?(app: Application, event: string, service: string, start: Date, duration: number,
         listener?: string): void;
 
     /**
@@ -25,7 +25,7 @@ export interface ServiceLogger {
      *
      * Durations are provided in milliseconds.
      */
-    logHook?(hook: HookContext<{}, Params>, name: string, duration: number,
+    logHook?(hook: HookContext<{}, Params>, name: string, start: Date, duration: number,
         parallel?: Promise<number>): void;
 
     /**
@@ -36,8 +36,8 @@ export interface ServiceLogger {
      *
      * Durations are provided in milliseconds.
      */
-    logMethod?(app: Application, hook: Params, service: string, method: string, duration: number,
-        withHooks?: number): void;
+    logMethod?(app: Application, hook: Params, service: string, method: string, start: Date,
+        duration: number, withHooks?: number): void;
 }
 
 type LoggedHook<I, P> = (hook: HookContext<I, P>) => Promise<HookContext<I, P>>;
@@ -57,6 +57,7 @@ export class ServiceBuilder {
         if (this._logger && this._logger.logMethod) {
             const logger = this._logger;
             hooks.before.all = [hook => {
+                hook.params._startTime = new Date();
                 hook.params._start = process.hrtime();
                 return Promise.resolve(hook);
             }];
@@ -64,7 +65,7 @@ export class ServiceBuilder {
                 const [seconds, nano] = process.hrtime(hook.params._start);
                 const ms = seconds * 1000 + nano / 1000000;
                 logger.logMethod(hook.app, hook.params, `/${hook.path}`, hook.method,
-                    hook.params._duration, ms);
+                    hook.params._startTime, hook.params._duration, ms);
                 return Promise.resolve(hook);
             }];
         }
@@ -107,13 +108,14 @@ export class ServiceBuilder {
                     const logger = this._logger;
                     const current = currentMethod;
                     const logged = async function(this: any, ...args) {
+                        const startTime = new Date();
                         const start = process.hrtime();
                         const result = await method.apply(this, args);
                         const params = args[args.length - 1];
                         const [seconds, nano] = process.hrtime(start);
                         const ms = seconds * 1000 + nano / 1000000;
                         if (!params._start) {
-                            logger.logMethod(builtApp, params, builtPath, current, ms);
+                            logger.logMethod(builtApp, params, builtPath, current, startTime, ms);
                         } else {
                             params._duration = ms;
                         }
@@ -183,11 +185,12 @@ export class ServiceBuilder {
                     const originalOn = built.on;
                     built.on = (event, callback, caller) => {
                         const logged = async data => {
+                            const startTime = new Date();
                             const start = process.hrtime();
                             const result = await callback.call(built, data);
                             const [seconds, nano] = process.hrtime(start);
                             const ms = seconds * 1000 + nano / 1000000;
-                                logger.logEvent(app, event, path, ms, caller);
+                                logger.logEvent(app, event, path, startTime, ms, caller);
                             return result;
                         };
                         return originalOn.call(built, event, caller ? logged : callback);
@@ -226,6 +229,7 @@ function logHook<I, P extends Params>(hook: LoggedHook<I, P>, logger?: ServiceLo
     parallel?: Promise<number>): LoggedHook<I, P> {
     if (logger && logger.logHook) {
         return (actual: HookContext<I, P>) => {
+            const startTime = new Date();
             const start = process.hrtime();
             const result = hook(actual);
             Promise.resolve(result)
@@ -233,7 +237,7 @@ function logHook<I, P extends Params>(hook: LoggedHook<I, P>, logger?: ServiceLo
                     const [seconds, nano] = process.hrtime(start);
                     const ms = seconds * 1000 + nano / 1000000;
                     if (newHook) {
-                        logger.logHook(newHook, hook.name || 'unknown', ms, parallel);
+                        logger.logHook(newHook, hook.name || 'unknown', startTime, ms, parallel);
                     }
                 });
             return result;
