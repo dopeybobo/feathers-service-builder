@@ -13,6 +13,7 @@ export type MappedPublisher<I, O> = (data: I, hook: AfterContext<void, void, I>)
 
 export interface PublisherBuilder<T, OP, P, O> {
     publishTo(publisher: Publisher<O, P>): Builder<T, OP>;
+    publishTo(publisher: Publisher<void, P>): Builder<T, OP>;
 }
 
 export interface MessageService<E extends string, O> {
@@ -64,11 +65,15 @@ export type BeforeBuilder<T, M extends Method, OP, I = void, P = OP> =
     BeforeMethods<T, M, OP, I, P> & Methods<T, M, OP, I, P>;
 
 export interface BeforeMethods<T, M extends Method, OP, I, P> {
+    /** Adds the provided before hook to the current method. */
     before<P2>(hook: BeforeHook<P, P2>): BeforeBuilder<T, M, OP, I, Merge2<P, P2>>;
+    /** Adds the provided before hooks to the current method. Hooks run in parallel. */
     before<P2, P3>(hook: BeforeHook<P, P2>,
         hook2: BeforeHook<P, P3>): BeforeBuilder<T, M, OP, I, Merge3<P, P2, P3>>;
+    /** Adds the provided before hooks to the current method. Hooks run in parallel. */
     before<P2, P3, P4>(hook: BeforeHook<P, P2>, hook2: BeforeHook<P, P3>,
         hook3: BeforeHook<P, P4>): BeforeBuilder<T, M, OP, I, Merge4<P, P2, P3, P4>>;
+    /** Adds the provided before hooks to the current method. Hooks run in parallel. */
     before<P2, P3, P4, P5>(hook: BeforeHook<P, P2>, hook2: BeforeHook<P, P3>,
         hook3: BeforeHook<P, P4>,
         hook4: BeforeHook<P, P5>): BeforeBuilder<T, M, OP, I, Merge5<P, P2, P3, P4, P5>>;
