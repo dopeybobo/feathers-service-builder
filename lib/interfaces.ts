@@ -1,5 +1,19 @@
-import { Application, Channel, TypedChannel } from '@feathersjs/feathers';
-import { AfterHook, AfterContext, BeforeHook, OutputHook, ValidateHook } from './hooks';
+import { Application } from '@feathersjs/feathers';
+import { AfterContext, AfterHook, BeforeHook, OutputHook, ValidateHook } from './hooks';
+
+export interface Connection { }
+
+export interface Channel {
+    readonly connections: Connection[];
+    readonly length: number;
+    filter(filter: ((connection: Connection) => boolean)): Channel;
+    join(...connections: Connection[]): this;
+    leave(...connections: Connection[]): this;
+    leave(filter: ((connection: Connection) => boolean)): this;
+    send<T>(data: T): TypedChannel<T>;
+}
+
+export interface TypedChannel<T> extends Channel { }
 
 export type Merge2<T, U> = T extends void ? U : U extends void ? T : T & U;
 export type Merge3<T, U, V> = T extends void ? Merge2<U, V> : T & Merge2<U, V>;

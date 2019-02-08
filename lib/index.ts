@@ -3,8 +3,8 @@ import { disallow } from 'feathers-hooks-common';
 import { HookContext } from './hooks';
 import { Builder } from './interfaces';
 
-export { Publisher, MappedPublisher } from './interfaces';
-export { AfterHook, AfterContext, BeforeHook, BeforeContext, HookContext, OutputHook,
+export { MappedPublisher, Publisher } from './interfaces';
+export { AfterContext, AfterHook, BeforeContext, BeforeHook, HookContext, OutputHook,
     ValidateHook } from './hooks';
 
 export interface ServiceLogger {

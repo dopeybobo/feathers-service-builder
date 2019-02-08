@@ -1,6 +1,7 @@
 {
   "name": "feathers-service-builder",
-  "version": "0.4.1",
+  "repository": "dopeybobo/feathers-service-builder",
+  "version": "0.5.0",
   "description": "A TypeScript friendly service builder for FeathersJS",
   "private": true,
   "main": "dist/index.js",
@@ -16,11 +17,13 @@
   ],
   "license": "MIT",
   "dependencies": {
-    "@feathersjs/feathers": "^3.3.0",
     "feathers-hooks-common": "^4.19.6"
   },
   "devDependencies": {
-    "@types/node": "^10.12.18",
-    "typescript": "^3.2.2"
+    "@types/node": "^10.12.23",
+    "typescript": "^3.3.3"
+  },
+  "peerDependencies": {
+    "@feathersjs/feathers": "^3.3.0"
   }
 }
