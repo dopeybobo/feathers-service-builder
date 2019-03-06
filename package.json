@@ -1,21 +1,35 @@
 {
   "name": "feathers-service-builder",
-  "repository": "dopeybobo/feathers-service-builder",
   "version": "0.5.0",
   "description": "A TypeScript friendly service builder for FeathersJS",
   "private": true,
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
+  "files": [
+    "/dist/*.d.ts"
+  ],
   "scripts": {
     "prepublishOnly": "npm run build",
     "build": "tsc"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/dopeybobo/feathers-service-builder.git"
   },
   "keywords": [
     "feathers",
     "feathersjs",
     "typescript"
   ],
+  "author": {
+    "name": "Cameron Neblett",
+    "email": "cameron@neblett.info"
+  },
   "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/dopeybobo/feathers-service-builder/issues"
+  },
+  "homepage": "https://github.com/dopeybobo/feathers-service-builder",
   "dependencies": {
     "feathers-hooks-common": "^4.19.6"
   },
