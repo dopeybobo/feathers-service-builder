@@ -1,6 +1,6 @@
 {
   "name": "feathers-service-builder",
-  "version": "0.5.0",
+  "version": "0.6.0",
   "description": "A TypeScript friendly service builder for FeathersJS",
   "private": true,
   "main": "dist/index.js",

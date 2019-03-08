@@ -3,6 +3,10 @@
         "target": "es2017",
         "module": "commonjs",
         "declaration": true,
-        "outDir": "./dist"
-    }
+        "outDir": "dist"
+    },
+    "exclude": [
+        "dist",
+        "examples"
+    ]
 }

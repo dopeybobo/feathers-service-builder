@@ -1,9 +1,10 @@
 import { Application, Params } from '@feathersjs/feathers';
 import { disallow } from 'feathers-hooks-common';
+
 import { HookContext } from './hooks';
 import { Builder } from './interfaces';
 
-export { MappedPublisher, Publisher } from './interfaces';
+export { Channel, Connection, MappedPublisher, Publisher, TypedChannel } from './interfaces';
 export { AfterContext, AfterHook, BeforeContext, BeforeHook, HookContext, OutputHook,
     ValidateHook } from './hooks';
 
@@ -25,7 +26,7 @@ export interface ServiceLogger {
      *
      * Durations are provided in milliseconds.
      */
-    logHook?(hook: HookContext<{}, Params>, name: string, start: Date, duration: number,
+    logHook?(hook: HookContext<Params>, name: string, start: Date, duration: number,
         parallel?: Promise<number>): void;
 
     /**
@@ -36,11 +37,11 @@ export interface ServiceLogger {
      *
      * Durations are provided in milliseconds.
      */
-    logMethod?(app: Application, hook: Params, service: string, method: string, start: Date,
+    logMethod?(app: Application, hookParams: Params, service: string, method: string, start: Date,
         duration: number, withHooks?: number): void;
 }
 
-type LoggedHook<I, P> = (hook: HookContext<I, P>) => Promise<HookContext<I, P>>;
+type LoggedHook<P, I> = (hook: HookContext<P, I>) => Promise<HookContext<P, I>>;
 
 let _globalLogger: ServiceLogger;
 
@@ -225,10 +226,10 @@ function runParallel(logger: ServiceLogger, hooks: any[]) {
     };
 }
 
-function logHook<I, P extends Params>(hook: LoggedHook<I, P>, logger?: ServiceLogger,
-    parallel?: Promise<number>): LoggedHook<I, P> {
+function logHook<P, I>(hook: LoggedHook<P, I>, logger?: ServiceLogger,
+    parallel?: Promise<number>): LoggedHook<P, I> {
     if (logger && logger.logHook) {
-        return (actual: HookContext<I, P>) => {
+        return (actual: HookContext<P, I>) => {
             const startTime = new Date();
             const start = process.hrtime();
             const result = hook(actual);

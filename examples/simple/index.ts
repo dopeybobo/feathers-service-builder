@@ -45,7 +45,7 @@ interface CreateRequest {
 }
 
 function validateCreate(): ValidateHook<CreateRequest> {
-    return (hook: BeforeContext<CreateRequest, void>): BeforeContext<CreateRequest, void> => {
+    return (hook: BeforeContext<unknown, CreateRequest>): BeforeContext<unknown, CreateRequest> => {
         const { id, message } = hook.data;
         if (!id || !message || typeof id !== 'string' || typeof message !== 'string') {
             throw new errors.BadRequest('You must provide an id and message');
