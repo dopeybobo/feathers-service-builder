@@ -1,0 +1,157 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <base href="/">
+  <title>Test Chat Application</title>
+  <style type="text/css">
+    body {
+      font-family: sans-serif;
+    }
+
+    label {
+      display: block;
+      margin-bottom: 8px;
+      text-align: right;
+    }
+
+    .login {
+      display: block;
+      text-align: center;
+    }
+
+    .bot {
+      color: #393;
+      font-style: italic;
+    }
+
+    #controls {
+      text-align: center;
+    }
+
+    #controls > div {
+      border: 1px solid #ccc;
+      display: inline-block;
+      margin: 8px;
+      padding: 8px;
+    }
+
+    #error {
+      border: none;
+      color: #c33;
+    }
+  </style>
+  <script type="text/javascript" src="//cdnjs.cloudflare.com/ajax/libs/core-js/2.1.4/core.min.js"></script>
+  <script src="//unpkg.com/@feathersjs/client@^3.0.0/dist/feathers.js"></script>
+  <script src="//unpkg.com/socket.io-client@1.7.3/dist/socket.io.js"></script>
+  <script>
+    let app;
+    let user;
+
+    function makeElement(className, value) {
+      const element = document.createElement('span');
+      element.className = className;
+      element.textContent = value;
+      return element;
+    }
+
+    function showError(message) {
+      document.getElementById('error').textContent = message;
+    }
+
+    function createUser() {
+      const username = document.getElementById('username').value;
+      const name = document.getElementById('name').value;
+      if (!name || !username) {
+        return;
+      }
+      const userSection = document.getElementById('user');
+      userSection.style.display = 'none';
+      app.service('user').create({ username, name })
+        .then(result => {
+          user = result;
+          userSection.parentElement.removeChild(userSection);
+          const nameElement = makeElement('login', `Name: ${name}`);
+          document.body.insertBefore(nameElement, document.body.firstChild);
+          document.body.insertBefore(makeElement('login', `Username: ${username}`), nameElement);
+        })
+        .catch(err => {
+          userSection.style.removeProperty('display');
+          showError(err.message || `${err}`);
+        });
+    }
+
+    function sendMessage() {
+      const messageInput = document.getElementById('message');
+      const message = messageInput.value;
+      if (!message) {
+        return;
+      }
+      app.service('chat').create({ username: user.username, message })
+        .catch(err => showError(err.message || `${err}`));
+      messageInput.value = '';
+    }
+
+    function createBot() {
+      const name = document.getElementById('botName').value;
+      const trigger = document.getElementById('trigger').value;
+      const replacement = document.getElementById('replacement').value;
+
+      if (!name || !trigger || !replacement) {
+        return;
+      }
+      app.service('bot').create({ name, trigger, replacement })
+        .catch(err => showError(err.message || `${err}`));
+    }
+
+    function removeBot() {
+      const name = document.getElementById('botName').value;
+      if (!name) {
+        return;
+      }
+      app.service('bot').remove(name)
+        .catch(err => showError(err.message || `${err}`));
+    }
+
+    window.onload = () => {
+      const socket = io('http://localhost:8040');
+      app = feathers();
+      app.configure(feathers.socketio(socket));
+
+      app.service('chat').on('created', chat => {
+        const element = document.createElement('div');
+        if (chat.isBot) {
+          element.appendChild(makeElement('bot', 'BOT '));
+        }
+        element.appendChild(makeElement('name', `${chat.from} says: `));
+        element.appendChild(makeElement('message', chat.message));
+
+        document.getElementById('messages').appendChild(element);
+      });
+    };
+  </script>
+</head>
+<body>
+  <div id="controls">
+    <div id="user">
+      <label>Username <input id="username"></label>
+      <label>Name <input id="name"></label>
+      <button onclick="createUser()">Create User</button>
+    </div>
+    <div>
+      <label>Message <input id="message"></label>
+      <button onclick="sendMessage()">Send Message</button>
+    </div>
+    <div>
+      <label>Name <input id="botName" value="Botty McBot"></label>
+      <label>Trigger Message <input id="trigger" value="you"></label>
+      <label>Replacement <input id="replacement" value="Your Face"></label>
+      <button onclick="createBot()">Create Bot</button>
+      <button onclick="removeBot()">Delete Bot</button>
+    </div>
+  </div>
+  <div id="error"></div>
+  <div id="messages"></div>
+</body>
+</html>
